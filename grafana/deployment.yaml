@@ -1,0 +1,43 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      nodeSelector:
+        failure-domain.beta.kubernetes.io/zone: europe-west1-b
+      containers:
+        - name: grafana
+          image: grafana/grafana:4.2.0
+          command:
+            - /bin/bash
+            - /run-wrapper.sh
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: grafana-configmap-volume
+              mountPath: /run-wrapper.sh
+              subPath: run-wrapper.sh
+            - name: grafana-configmap-volume
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
+            - name: kubernetes-dashboards
+              mountPath: /var/lib/grafana/dashboards/
+      volumes:
+        - name: grafana-configmap-volume
+          configMap:
+            name: grafana-configmap
+            items:
+              - path: "grafana.ini"
+                key: grafana.ini
+              - path: "run-wrapper.sh"
+                key: run-wrapper.sh
+        - name: kubernetes-dashboards
+          configMap:
+            name: kubernetes-dashboards

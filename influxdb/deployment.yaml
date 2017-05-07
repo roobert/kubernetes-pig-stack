@@ -1,0 +1,42 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+
+metadata:
+  name: influxdb
+  namespace: monitoring
+
+spec:
+  replicas: 1
+
+  template:
+    metadata:
+      labels:
+        app: influxdb
+
+    spec:
+      nodeSelector:
+        failure-domain.beta.kubernetes.io/zone: europe-west1-b
+
+      containers:
+        - name: influxdb
+          image: influxdb:1.2.2
+          command: [ "influxd", "-config", "/config/influxdb.conf" ]
+          ports:
+            - containerPort: 8086
+          volumeMounts:
+            - name: configmap-volume
+              mountPath: /config
+            - name: influxdb
+              mountPath: /data
+      volumes:
+        - name: configmap-volume
+          configMap:
+            name: influxdb-configmap
+            items:
+              - path: "influxdb.conf"
+                key: influxdb.conf
+
+
+        - name: influxdb
+          persistentVolumeClaim:
+            claimName: influxdb

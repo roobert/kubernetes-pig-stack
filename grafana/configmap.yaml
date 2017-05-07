@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-configmap
+  namespace: monitoring
+data:
+  grafana.ini: |
+    [dashboards.json]
+    enabled = true
+    path = /var/lib/grafana/dashboards
+
+    [auth]
+    disable_login_form = true
+
+    [auth.anonymous]
+    enabled = true
+    org_role = Admin
+
+  run-wrapper.sh: |
+    apt-get update
+    apt-get -y install curl jq
+
+    echo "Starting Grafana..."
+
+    /run.sh &
+
+    while :; do
+      RESPONSE=$(/usr/bin/curl 'http://admin:admin@localhost:3000/api/datasources' \
+        -X POST \
+        -H 'Content-Type: application/json;charset=UTF-8' \
+         --data-binary \
+        '{"name":"Prometheus","type":"prometheus","url":"http://prometheus:9090","access":"proxy","isDefault":true}' | jq 'has("id")')
+
+      [[ "${RESPONSE}" == "true" ]] && break
+    done
+
+    for dashboard in /var/lib/grafana/dashboards/* ; do
+      dashboard_json=$(cat ${dashboard}|tr "\n" " ")
+      dashboard_json='{"dashboard":'"$dashboard_json"'}'
+
+      curl http://admin:admin@localhost:3000/api/dashboards/db -X POST \
+        -H 'Content-Type: application/json;charset=UTF8' \
+        --data-binary ''"$dashboard_json"''
+    done
+
+    while :; do sleep 1; done

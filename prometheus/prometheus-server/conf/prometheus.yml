@@ -1,0 +1,117 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "ssl_expiry.rules"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+    - targets: ['localhost:9090']
+
+  # monitor each kubelet cAdvisor /metrics end point (one per server)
+  - job_name: 'kubernetes-node'
+    scheme: http
+    kubernetes_sd_configs:
+    - role: node
+    relabel_configs:
+    - action: labelmap
+      regex: __meta_kubernetes_node_label_(.+)
+    - source_labels: [__address__]
+      regex:  '(.*):(.*)'
+      target_label: __address__
+      replacement: '${1}:10255'
+
+  # expose node hardware metrics
+  - job_name: 'node'
+    scheme: http
+    kubernetes_sd_configs:
+    - role: pod
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_name]
+      regex: node-exporter-(.*)
+      action: keep
+
+  # monitor proxy service which translates metrics from kubernetes API
+  - job_name: 'kube-state-metrics'
+    scheme: http
+    kubernetes_sd_configs:
+    - role: service
+    tls_config:
+      insecure_skip_verify: true
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_service_name]
+      regex: kube-state-metrics
+      action: keep
+
+  # monitor pods that expose on /checkz
+  - job_name: 'monitoring-checkz'
+    scheme: http
+    kubernetes_sd_configs:
+    - role: pod
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape_checkz]
+      action: keep
+      regex: true
+    - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_checkz_path]
+      action: replace
+      target_label: __metrics_path__
+      regex: (.+)
+    - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+      action: replace
+      regex: ([^:]+)(?::\d+)?;(\d+)
+      replacement: $1:$2
+      target_label: __address__
+    - action: labelmap
+      regex: __meta_kubernetes_pod_label_(.+)
+    - source_labels: [__meta_kubernetes_namespace]
+      action: replace
+      target_label: kubernetes_namespace
+    - source_labels: [__meta_kubernetes_pod_name]
+      action: replace
+      target_label: kubernetes_pod_name
+
+  - job_name: 'monitoring-metricz'
+    scheme: http
+    kubernetes_sd_configs:
+    - role: pod
+    relabel_configs:
+    - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape_metricz]
+      action: keep
+      regex: true
+    - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_metricz_path]
+      action: replace
+      target_label: __metrics_path__
+      regex: (.+)
+    - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+      action: replace
+      regex: ([^:]+)(?::\d+)?;(\d+)
+      replacement: $1:$2
+      target_label: __address__
+    - action: labelmap
+      regex: __meta_kubernetes_pod_label_(.+)
+    - source_labels: [__meta_kubernetes_namespace]
+      action: replace
+      target_label: kubernetes_namespace
+    - source_labels: [__meta_kubernetes_pod_name]
+      action: replace
+      target_label: kubernetes_pod_name
+
+  - job_name: 'ssl-cert-expiry'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # Look for a HTTP 200 response.
+    file_sd_configs:
+    - files:
+      - "/target_group/k8s-letsencrypt-ssl-certs.json"
+      - "/target_group/gcp-ssl-certs.json"
+    relabel_configs:
+    - source_labels: [__address__]
+      regex: (.*?)(:80)?
+      target_label: __param_target
+      replacement: https://${1}
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox-exporter:9115

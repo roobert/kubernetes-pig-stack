@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: influxdb-configmap
+  namespace: monitoring
+data:
+  influxdb.conf: >
+    [meta]
+      dir = "/var/lib/influxdb/meta"
+      retention-autocreate = true
+    [data]
+      dir = "/var/lib/influxdb/data"
+      wal-dir = "/var/lib/influxdb/wal"
+    [retention]
+      enabled = true
+      check-interval = "30m"
+    [admin]
+      enabled = true
+      bind-address = ":8083"
+    [[graphite]]
+      enabled = true
+      bind-address = ":2003"
+    [[udp]]
+      enabled = true
+      database = "influxdb"
+      bind-address = ":8089"
+    [http]
+      enabled = true
+      bind-address = "0.0.0.0:8086"
+      auth-enabled = false
+      log-enabled = true
+      write-tracing = false
+      pprof-enabled = false
+      https-enabled = false
+

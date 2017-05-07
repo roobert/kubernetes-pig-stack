@@ -1,0 +1,50 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: prometheus-server
+    spec:
+      containers:
+        - name: gcp-ssl-certs
+          image: roobert/gcp-ssl-certs:v0.0.6
+          volumeMounts:
+          - name: shared-data
+            mountPath: /target_group
+
+        - name: gke-letsencrypt-certs
+          image: roobert/gke-letsencrypt-certs:v0.0.9
+          volumeMounts:
+          - name: shared-data
+            mountPath: /target_group
+
+        - name: prometheus
+          image: prom/prometheus:v1.4.1
+          command:
+            - "/bin/prometheus"
+            - "-config.file=/config/prometheus.yml"
+            - "-storage.local.path=/prometheus"
+            - "-web.console.libraries=/etc/prometheus/console_libraries"
+            - "-web.console.templates=/etc/prometheus/consoles"
+            - "-storage.remote.influxdb-url=http://influxdb:8086/"
+            - "-storage.remote.influxdb.database=prometheus"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+          - name: prometheus-configmap
+            mountPath: /config
+          - name: shared-data
+            mountPath: /target_group
+
+      volumes:
+      - name: prometheus-configmap
+        configMap:
+          name: prometheus-configmap
+      - name: shared-data
+        emptyDir: {}
